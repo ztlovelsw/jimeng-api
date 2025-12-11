@@ -3,7 +3,7 @@
 # --------------------
 # API builder stage
 # --------------------
-FROM node:18-alpine AS api-builder
+FROM node:20.19.5 AS api-builder
 
 WORKDIR /app
 
