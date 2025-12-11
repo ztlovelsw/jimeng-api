@@ -26,7 +26,14 @@ const server = createServer(async (req, res) => {
       return;
     }
   } catch (err) {
-    // fall back to index.html
+    // file not found, evaluate fallback
+  }
+
+  const looksLikeAsset = /\.[^/]+$/.test(safePath);
+  if (looksLikeAsset) {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not found');
+    return;
   }
 
   try {
