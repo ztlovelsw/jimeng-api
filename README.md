@@ -181,6 +181,16 @@ This project includes a dedicated Claude Code Skill for quick image generation u
 docker-compose up -d
 # or
 docker run -d --name jimeng-api -p 5100:5100 ghcr.io/iptag/jimeng-api:latest
+
+# Build your own images (API-only or API + Web UI)
+# API only target
+docker build -f Dockerfile.webui --target api -t jimeng-api:api .
+
+# API + Web UI target (exposes 5100 for API and 4173 for the UI by default)
+docker build -f Dockerfile.webui --target api-webui -t jimeng-api:full .
+docker run -d --name jimeng-api-full -p 5100:5100 -p 4173:4173 jimeng-api:full
+
+# The multi-stage Dockerfile uses Node.js 20 to satisfy the Web UI build requirements.
 ```
 
 2. **Copy the skill to Claude Code's skills directory**:
