@@ -86,6 +86,9 @@ CMD ["yarn", "start"]
 # --------------------
 FROM api-runtime-base AS api-webui
 
+# Install busybox-extras for httpd applet
+RUN apk add --no-cache busybox-extras
+
 # Copy built static assets
 COPY --from=webui-builder --chown=jimeng:nodejs /webui/dist /app/webui
 
