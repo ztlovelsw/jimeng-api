@@ -1,0 +1,106 @@
+# Multi-stage Dockerfile to build API only or API + Web UI images
+
+# --------------------
+# API builder stage
+# --------------------
+FROM node:18-alpine AS api-builder
+
+WORKDIR /app
+
+# Build dependencies for native modules
+RUN apk add --no-cache python3 make g++
+
+# Install API dependencies
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile --registry https://registry.npmmirror.com/ --ignore-engines
+
+# Copy source code and build
+COPY . .
+
+ARG VERSION
+RUN if [ -n "$VERSION" ]; then \
+      echo "Updating package.json version to $VERSION"; \
+      sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" package.json; \
+      grep \"version\" package.json; \
+    fi
+
+RUN yarn build
+
+# --------------------
+# Web UI builder stage
+# --------------------
+FROM node:18-alpine AS webui-builder
+
+WORKDIR /webui
+
+COPY jimeng-web-ui/package.json jimeng-web-ui/package-lock.json ./
+RUN npm ci --registry https://registry.npmmirror.com/
+
+COPY jimeng-web-ui .
+RUN npm run build
+
+# --------------------
+# Runtime base for both images
+# --------------------
+FROM node:18-alpine AS api-runtime-base
+
+RUN apk add --no-cache wget
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S jimeng -u 1001
+
+WORKDIR /app
+
+COPY --from=api-builder /app/package.json ./package.json
+COPY yarn.lock ./
+
+# Only install production dependencies
+RUN yarn install --frozen-lockfile --production --registry https://registry.npmmirror.com/ --ignore-engines && \
+    yarn cache clean
+
+COPY --from=api-builder --chown=jimeng:nodejs /app/dist ./dist
+COPY --from=api-builder --chown=jimeng:nodejs /app/configs ./configs
+
+RUN mkdir -p /app/logs /app/tmp && \
+    chown -R jimeng:nodejs /app/logs /app/tmp
+
+ENV SERVER_PORT=5100
+
+# --------------------
+# API-only runtime
+# --------------------
+FROM api-runtime-base AS api
+
+USER jimeng
+
+EXPOSE 5100
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -q --spider http://localhost:5100/ping
+
+CMD ["yarn", "start"]
+
+# --------------------
+# API + Web UI runtime
+# --------------------
+FROM api-runtime-base AS api-webui
+
+# Copy built static assets
+COPY --from=webui-builder --chown=jimeng:nodejs /webui/dist /app/webui
+
+# Add entrypoint script
+COPY docker/entrypoint-api-webui.sh /usr/local/bin/entrypoint-api-webui.sh
+RUN chmod +x /usr/local/bin/entrypoint-api-webui.sh && \
+    chown jimeng:nodejs /usr/local/bin/entrypoint-api-webui.sh
+
+ENV WEBUI_PORT=4173
+
+USER jimeng
+
+EXPOSE 5100 4173
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -q --spider http://localhost:5100/ping
+
+CMD ["/usr/local/bin/entrypoint-api-webui.sh"]

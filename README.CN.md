@@ -191,6 +191,14 @@ log_level: info # 日志级别: error, warning, info(默认), debug
 docker-compose up -d
 # 或
 docker run -d --name jimeng-api -p 5100:5100 ghcr.io/iptag/jimeng-api:latest
+
+# 构建自定义镜像（仅 API 或 API + Web UI）
+# 仅 API 版本
+docker build -f Dockerfile.webui --target api -t jimeng-api:api .
+
+# API + Web UI 版本（默认开放 5100 为 API，4173 为前端）
+docker build -f Dockerfile.webui --target api-webui -t jimeng-api:full .
+docker run -d --name jimeng-api-full -p 5100:5100 -p 4173:4173 jimeng-api:full
 ```
 
 2. **将 skill 复制到 Claude Code 的 skills 目录**:
