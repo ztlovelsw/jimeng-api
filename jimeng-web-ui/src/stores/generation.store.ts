@@ -45,7 +45,7 @@ function loadInitialState(): StoredGenerationState {
             return {
               ...taskState,
               status: 'error',
-              error: '生成任务可能已超时，请重新尝试',
+              error: '检测到页面刷新，任务已中断。请重新生成。',
               endTime: Date.now(),
             }
           }
@@ -196,11 +196,20 @@ export const useGenerationStore = defineStore('generation', () => {
 
   function saveToStorage() {
     const state: StoredGenerationState = {
-      image: imageState.value,
-      composition: compositionState.value,
-      video: videoState.value,
+      image: sanitizeTaskState(imageState.value),
+      composition: sanitizeTaskState(compositionState.value),
+      video: sanitizeTaskState(videoState.value),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }
+
+  // 清理任务状态，不保存 loading 状态
+  function sanitizeTaskState(taskState: TaskState): TaskState {
+    // loading 状态不持久化，避免刷新后状态不一致
+    if (taskState.status === 'loading') {
+      return createEmptyTaskState()
+    }
+    return taskState
   }
 
   function loadFromStorage() {
@@ -221,7 +230,7 @@ export const useGenerationStore = defineStore('generation', () => {
               stateRef.value = {
                 ...stateRef.value,
                 status: 'error',
-                error: '生成任务可能已超时，请重新尝试',
+                error: '检测到页面刷新，任务已中断。请重新生成。',
                 endTime: Date.now(),
               }
             }

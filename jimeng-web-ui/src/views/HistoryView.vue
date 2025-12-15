@@ -83,10 +83,22 @@ function closeDetail() {
   selectedItem.value = null
 }
 
-// Use prompt - navigate to appropriate view
+// Use prompt - navigate to appropriate view with all parameters
 function usePrompt(item: HistoryItem) {
-  // Navigate to appropriate view with prompt as query param
-  const query = { prompt: item.prompt }
+  // 构建包含所有参数的 query
+  const query: Record<string, string> = {
+    prompt: item.prompt
+  }
+  
+  // 添加参数到 query
+  if (item.params) {
+    Object.keys(item.params).forEach(key => {
+      const value = item.params[key]
+      if (value !== undefined && value !== null) {
+        query[key] = String(value)
+      }
+    })
+  }
   
   if (item.type === 'image') {
     router.push({ path: '/text-to-image', query })
@@ -111,7 +123,7 @@ function deleteItem() {
     historyStore.removeItem(itemToDelete.value)
     itemToDelete.value = null
     showDeleteConfirm.value = false
-    
+    showDetailModal.value = false
     // Close detail modal if the deleted item was selected
     if (selectedItem.value?.id === itemToDelete.value) {
       closeDetail()

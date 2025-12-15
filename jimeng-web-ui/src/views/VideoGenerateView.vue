@@ -29,14 +29,71 @@ const generationStore = useGenerationStore()
 const historyStore = useHistoryStore()
 const settingsStore = useSettingsStore()
 
+// 从 localStorage 加载用户上次的选择
+const FORM_STATE_KEY = 'jimeng_video_generate_form'
+function loadFormState() {
+  try {
+    const stored = localStorage.getItem(FORM_STATE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch {
+    // ignore
+  }
+  return {}
+}
+
+const savedState = loadFormState()
+
 // Form state
-const mode = ref<VideoMode>('text-to-video')
+const mode = ref<VideoMode>(savedState.mode || 'text-to-video')
 const prompt = ref('')
-const model = ref('jimeng-video-3.0')
-const ratio = ref('16:9')
-const duration = ref<5 | 10>(5)
+const model = ref(savedState.model || 'jimeng-video-3.0')
+const ratio = ref(savedState.ratio || '16:9')
+const duration = ref<5 | 10>(savedState.duration || 5)
 const firstFrameImages = ref<UploadedImage[]>([])
 const lastFrameImages = ref<UploadedImage[]>([])
+
+// 保存表单状态到 localStorage
+function saveFormState() {
+  const state = {
+    mode: mode.value,
+    model: model.value,
+    ratio: ratio.value,
+    duration: duration.value
+  }
+  localStorage.setItem(FORM_STATE_KEY, JSON.stringify(state))
+}
+
+// 监听表单变化，自动保存
+watch([mode, model, ratio, duration], () => {
+  saveFormState()
+})
+
+// 从 URL query 参数加载（用于历史记录的"使用此提示词"功能）
+import { useRoute } from 'vue-router'
+import { onMounted } from 'vue'
+
+const route = useRoute()
+
+onMounted(() => {
+  // 从 URL query 加载参数
+  if (route.query.prompt) {
+    prompt.value = String(route.query.prompt)
+  }
+  if (route.query.model) {
+    model.value = String(route.query.model)
+  }
+  if (route.query.ratio) {
+    ratio.value = String(route.query.ratio)
+  }
+  if (route.query.duration) {
+    const d = parseInt(String(route.query.duration))
+    if (d === 5 || d === 10) {
+      duration.value = d
+    }
+  }
+})
 
 // Result state - 从 store 获取，支持持久化
 const videoUrl = computed(() => taskState.value.results[0] || null)
@@ -96,6 +153,21 @@ function formatError(error: unknown): string {
   }
   return '生成失败，请稍后重试'
 }
+
+// 监听 loading 状态，添加刷新警告
+watch(isLoading, (loading) => {
+  if (loading) {
+    window.onbeforeunload = () => '视频正在生成中，刷新页面将中断任务。确定要离开吗？'
+  } else {
+    window.onbeforeunload = null
+  }
+})
+
+// 组件卸载时清理
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  window.onbeforeunload = null
+})
 
 async function handleGenerate() {
   if (!canGenerate.value) return
@@ -280,6 +352,19 @@ async function handleGenerate() {
       >
         {{ isLoading ? '生成中...' : '生成视频' }}
       </BaseButton>
+
+      <!-- 生成中警告提示 -->
+      <div v-if="isLoading" class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+          </svg>
+          <div class="flex-1">
+            <p class="text-sm text-yellow-800 font-medium">生成中，请勿刷新页面</p>
+            <p class="text-xs text-yellow-700 mt-1">视频生成需要较长时间，刷新页面将中断任务</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Right Panel - Results -->
